@@ -1,5 +1,4 @@
-//Nisan Agabyev
-//322002080
+
 #include <stdio.h>
 #include <syscall.h>
 #include<errno.h>
