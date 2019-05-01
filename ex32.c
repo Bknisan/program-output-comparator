@@ -1,4 +1,5 @@
-
+// Nisan Agabyev
+// 322002080
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -7,7 +8,7 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 
-int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res, char *studentName) {
+int checkProgram(char *dir, char *firstDir, char *input, char *output, int tmpFile, char *studentName) {
     DIR *dirp;
     int status = 0;
     int isThereCFile = 0;
@@ -23,9 +24,9 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
                 strcat(newdir, "/");
                 strcat(newdir, ent->d_name);
                 if (studentName == NULL) {
-                    checkProgram(newdir, firstDir, input, output, res, ent->d_name);
+                    checkProgram(newdir, firstDir, input, output, tmpFile, ent->d_name);
                 } else {
-                    checkProgram(newdir, firstDir, input, output, res, studentName);
+                    checkProgram(newdir, firstDir, input, output, tmpFile, studentName);
                 }
             }
                 // program found.
@@ -47,7 +48,8 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
                     char line[250] = {0};
                     strcpy(line, studentName);
                     strcat(line, ",20,COMPILATION_ERROR\n");
-                    fprintf(res, "%s", line);
+                    write(tmpFile,line,strlen(line));
+                    //fprintf(res, "%s", line);
                     closedir(dirp);
                     return 0;
                 }
@@ -76,23 +78,18 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
                         char line[250] = {0};
                         strcpy(line, studentName);
                         strcat(line, ",40,TIMEOUT\n");
-                        fprintf(res, "%s", line);
-                        remove("a.out");
-                        remove("realOut.txt");
+                        write(tmpFile,line,strlen(line));
+                        //fprintf(res, "%s", line);
+                        unlink("a.out");
+                        unlink("realOut.txt");
                         closedir(dirp);
                         return 0;
                     }
                         // check if outputs are similar.
                     else {
                         int statusRet;
-                        char *args[] = {"gcc", "-o", "comp", "ex31.c", NULL};
                         //son process.
                         pid_t sonProc;
-                        if ((sonProc = fork()) == 0) {
-                            // compile first part program.
-                            execvp("gcc", args);
-                        }
-                        wait(&statusRet);
                         // run compiled program.
                         char path[250] = {0};
                         getcwd(path, 150);
@@ -109,9 +106,10 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
                             char line[250] = {0};
                             strcpy(line, studentName);
                             strcat(line, ",100,GREAT_JOB\n");
-                            fprintf(res, "%s", line);
-                            remove("a.out");
-                            remove("realOut.txt");
+                            write(tmpFile,line,strlen(line));
+                            //fprintf(res, "%s", line);
+                            unlink("a.out");
+                            unlink("realOut.txt");
                             closedir(dirp);
                             return 0;
                         }
@@ -120,9 +118,10 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
                             char line[250] = {0};
                             strcpy(line, studentName);
                             strcat(line, ",80,SIMILAR_OUTPUT\n");
-                            fprintf(res, "%s", line);
-                            remove("a.out");
-                            remove("realOut.txt");
+                            write(tmpFile,line,strlen(line));
+                           // fprintf(res, "%s", line);
+                            unlink("a.out");
+                            unlink("realOut.txt");
                             closedir(dirp);
                             return 0;
                         }
@@ -131,9 +130,10 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
                             char line[250] = {0};
                             strcpy(line, studentName);
                             strcat(line, ",60,BAD_OUTPUT\n");
-                            fprintf(res, "%s", line);
-                            remove("a.out");
-                            remove("realOut.txt");
+                            write(tmpFile,line,strlen(line));
+                           // fprintf(res, "%s", line);
+                            unlink("a.out");
+                            unlink("realOut.txt");
                             closedir(dirp);
                             return 0;
                         }
@@ -152,14 +152,14 @@ int checkProgram(char *dir, char *firstDir, char *input, char *output, FILE *res
             char line[250] = {0};
             strcpy(line, studentName);
             strcat(line, ",0,NO_C_FILE\n");
-            fprintf(res, "%s", line);
+            write(tmpFile,line,strlen(line));
+           // fprintf(res, "%s", line);
             closedir(dirp);
             return 0;
         }
         closedir(dirp);
         return 0;
     }
-    remove("comp");
     return 0;
 }
 
@@ -198,8 +198,46 @@ int main(int argc, char **argv) {
         }
     } while (reader != 0);
     // try to run the program.
-    FILE *results = fopen("results.csv", "w");
-    checkProgram(dir, dir, input, output, results, NULL);
-    fclose(results);
+    int tmpFd = open("tmp.csv",  O_CREAT | O_RDWR, 0666);
+    checkProgram(dir, dir, input, output, tmpFd, NULL);
+    unlink("realOut.txt");
+    lseek(tmpFd,0,SEEK_SET);
+    // create my file.
+    int fileDesOriginal = open("results.csv", O_CREAT | O_RDWR, 0666);
+    char tmp;
+    char oneAfterNewLine;
+    // indicator.
+    int bool = 0;
+    // read char by char until last '\n'
+    int Reader = read(tmpFd, &tmp, 1);
+    while (Reader != 0) {
+        // if its newline char, check the 1 after it.
+        if (tmp == '\n') {
+            Reader = read(tmpFd, &oneAfterNewLine, 1);
+            // still more data.
+            if (Reader != 0) {
+                bool = 1;
+                write(fileDesOriginal, &tmp, 1);
+                write(fileDesOriginal, &oneAfterNewLine, 1);
+            }
+                // EOF is reached.
+            else {
+                break;
+            }
+        }
+        if (Reader == 0)
+            break;
+        // not newline char.
+        if(bool == 0) {
+            write(fileDesOriginal, &tmp, 1);
+        }
+        bool = 0;
+        Reader = read(tmpFd,&tmp,1);
+    }
+    close(tmpFd);
+    close(fileDesOriginal);
+    // delete tmp files.
+    unlink("tmp.csv");
+    unlink("a.out");
     return 0;
 }
